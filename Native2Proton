@@ -1,0 +1,77 @@
+#/bin/bash
+echo "Native2Proton"
+echo "Please enter the steam appid of the game you would like to download"
+read appid
+echo "Where would you like to download the game data? (eg: /media/user/Native2Proton/game_name)"
+read downloaddir
+echo "Game data to be stored in: $downloaddir"
+echo "Checking for SteamCMD..."
+if [ -d ~/.steamcmd ]; then
+    echo "SteamCMD exists"
+else
+    mkdir ~/.steamcmd
+fi
+if [ -d ~/Native2Proton ];  then
+    echo "Native2Proton exists"
+else
+    mkdir ~/Native2Proton/
+    echo 'Created N2P'
+fi
+mkdir ~/Native2Proton/$appid/
+cd .steamcmd
+curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" | tar zxvf -
+chmod +x ~/.steamcmd/steamcmd.sh
+echo "Please enter your Steam username and press enter: "
+read username
+~/.steamcmd/steamcmd.sh +@sSteamCmdForcePlatformType windows +login $username +force_install_dir "$downloaddir" +app_update $appid validate +quit
+echo "Download complete, creating symlink..."
+ln -s "$downloaddir" ~/Native2Proton/$appid/data
+cd ~
+echo "Please enter the fullpath to your proton data files (Eg: /path/to/Steam/library/steamapps/common/Proton 3.8)"
+read protonpath
+if [ ! -d "$protonpath" ]; then
+    echo "Proton not found. Quitting"
+    exit
+else
+    echo "Proton path found"
+    touch ~/Native2Proton/$appid/rungame.sh
+    chmod +x ~/Native2Proton/$appid/rungame.sh
+    echo "Proton path is: $protonpath"
+    cd ~/Native2Proton/$appid/data
+    listid=0
+    list=()
+    for i in *.exe **/*.exe; do
+        echo "[$listid] $i"
+        list+=("$i")
+        listid=$((listid+1))
+    done
+    echo "Please select the game's executable by number"
+    read selectid
+    echo "creating wine prefix"
+    mkdir ~/Native2Proton/$appid/pfx
+    absolute="$(dirname ~/Native2Proton/$appid/pfx)"
+    userpath="$dirname ~/Native2Proton)"
+    WINEPREFIX="$absolute/pfx/" "$protonpath/dist/bin/wine" "wineboot" &
+    wait %1
+    echo "Creating runner..."
+    exe="${list[$selectid]}"
+    echo "#!/bin/bash" > ~/Native2Proton/$appid/rungame.sh
+    echo 'DEF_CMD=("'$absolute'/data/'$exe'")' >> ~/Native2Proton/$appid/rungame.sh
+    echo 'PATH="'$protonpath'/dist/bin/:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/snap/bin" \
+        TERM="xterm" \
+        WINEDEBUG="-all" \
+        WINEDLLPATH="'$protonpath'/dist/lib64/wine:'$protonpath'/dist/lib/wine" \
+        LD_LIBRARY_PATH="'$protonpath'/dist/lib64:'$protonpath'/dist/lib::'$userpath'/.local/share/Steam/ubuntu12_32:'$userpath'/.local/share/Steam/ubuntu12_32/panorama:" \
+        WINEPREFIX="'$absolute'/pfx/" \
+        SteamGameId="'$appid'" \
+        SteamAppId="'$appid'" \
+        WINEDLLOVERRIDES="d3d11=n;dxgi=n" \
+        STEAM_COMPAT_CLIENT_INSTALL_PATH="'$userpath'/.local/share/Steam" \' >> ~/Native2Proton/$appid/rungame.sh
+    echo '"'$protonpath'/dist/bin//wine64" "${@:-${DEF_CMD[@]}}"' >> ~/Native2Proton/$appid/rungame.sh
+    echo "Runner created. Launch game with: '~/Native2Proton/$appid/rungame.sh'"
+    echo "Would you like to run this game now? (y/n)"
+    read runnow
+    if [ $runnow = "y" ]; then
+        ~/Native2Proton/$appid/rungame.sh
+    fi
+fi
